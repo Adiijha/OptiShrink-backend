@@ -21,4 +21,10 @@ app.options("*", cors(corsOptions));
 import userRouter from './routes/user.routes.js';
 app.use('/user', userRouter);
 
+import fileRouter from './routes/pdf.routes.js';
+app.use('/file', fileRouter);
+
+import imageRouter from './routes/img.routes.js';
+app.use('/image', imageRouter);
+
 export {app};
