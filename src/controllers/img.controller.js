@@ -1,18 +1,58 @@
-import fs from 'fs';
-import path from 'path';
-import sharp from 'sharp'; // Ensure sharp is installed: npm install sharp
+import { uploadOnCloudinary } from '../utils/cloudinary.js';  // Import the Cloudinary utility
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
-import { fileURLToPath } from 'url';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
 
-// Define __dirname for ES modules
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config();
 
+// Helper function to dynamically adjust compression
+const getCompressionSettings = (compressionLevel) => {
+  let transformation;
+  
+  switch (compressionLevel) {
+    case 'low':
+      transformation = { 
+        width: 2400, 
+        quality: 80, 
+        crop: 'scale', 
+        fetch_format: 'auto', // Automatically choose best format
+      }; 
+      break;
+    case 'medium':
+      transformation = { 
+        width: 1600, 
+        quality: 60, 
+        crop: 'scale', 
+        fetch_format: 'auto', 
+      }; 
+      break;
+    case 'high':
+      transformation = { 
+        width: 1200, 
+        quality: 40, // More aggressive compression
+        crop: 'scale', 
+        fetch_format: 'auto', 
+      }; 
+      break;
+    default:
+      transformation = { 
+        width: 2400, 
+        quality: 70, 
+        crop: 'scale', 
+        fetch_format: 'auto', 
+      }; 
+  }
 
-// Image compression controller
-export const compressImageController = async (req, res) => {
+  return transformation;
+};
+
+// Image compression controller using Cloudinary and your existing upload utility
+export const compressImageController = asyncHandler(async (req, res) => {
   const { compressionLevel } = req.body;
-  const { filename } = req.file;
+  const { filename, path: localFilePath } = req.file;
 
   // Ensure the file is an image
   const validImageTypes = ['.jpg', '.jpeg', '.png', '.webp'];
@@ -22,61 +62,32 @@ export const compressImageController = async (req, res) => {
     throw new ApiError(400, 'Invalid file type. Only .jpg, .jpeg, .png, and .webp are supported');
   }
 
-  const filePath = path.resolve(__dirname, '..', '..', 'public', 'temp', filename);
-
-  if (!fs.existsSync(filePath)) {
+  if (!fs.existsSync(localFilePath)) {
     throw new ApiError(404, 'Uploaded file not found');
   }
 
-  try {
-    // Compress the image based on the specified level
-    const compressedImageBuffer = await compressImage(filePath, compressionLevel);
+  // Get dynamic compression settings based on the chosen level
+  const transformation = getCompressionSettings(compressionLevel);
 
-    const compressedImagePath = path.resolve(__dirname, '..', '..', 'public', 'temp', `compressed-${filename}`);
+  // Upload to Cloudinary using the existing upload utility with dynamic transformation
+  const { success, url, error } = await uploadOnCloudinary(localFilePath, {
+    folder: 'compressed-images', // Optional: specify a folder in Cloudinary
+    transformation: [transformation], // Apply transformations dynamically based on compression level
+  });
 
-    fs.writeFileSync(compressedImagePath, compressedImageBuffer);
-
-    res.status(200).json(new ApiResponse(true, 'Image compressed successfully', compressedImagePath));
-  } catch (error) {
-    throw new ApiError(500, 'Error compressing image');
-  }
-};
-
-// Compress image based on the compression level
-const compressImage = async (imagePath, compressionLevel) => {
-  let resizeWidth, quality;
-
-  // Set compression parameters based on level
-  switch (compressionLevel) {
-    case 'low':
-      resizeWidth = 3600;  // Larger size for low compression
-      quality = 90;        // Lower compression to keep quality higher
-      break;
-    case 'medium':
-      resizeWidth = 2400;  // Medium size
-      quality = 80;        // Moderate compression
-      break;
-    case 'high':
-      resizeWidth = 1600;   // Smaller size for high compression
-      quality = 70;        // Higher compression to reduce size
-      break;
-    default:
-      resizeWidth = 2600;
-      quality = 80;
-      break;
+  if (!success) {
+    throw new ApiError(500, error || 'Failed to upload file to Cloudinary');
   }
 
-  try {
-    const compressedImageBuffer = await sharp(imagePath)  // Use buffer here instead of path
-      .resize(resizeWidth)                           // Resize image according to the level
-      .jpeg({ quality: quality })                    // Adjust the quality for jpg
-      .png({ quality: quality })                     // Adjust the quality for png
-      .webp({ quality: quality })                    // Adjust the quality for webp
-      .toBuffer();                                  // Convert to buffer
-    
-    return compressedImageBuffer;
-  } catch (err) {
-    console.error(`Error compressing image:`, err);
-    throw new ApiError(500, 'Error compressing image');
-  }
-};
+  // Clean up the local file after successful upload
+  fs.unlink(localFilePath, (err) => {
+    if (err) {
+      console.error('Error deleting temporary file:', err);
+    } else {
+      console.log('Temporary file deleted successfully');
+    }
+  });
+
+  // Send success response with the Cloudinary URL
+  res.status(200).json(new ApiResponse(true, 'Image compressed and uploaded successfully', url));
+});
