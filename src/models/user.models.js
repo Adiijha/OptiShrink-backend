@@ -1,114 +1,87 @@
-import pkg from "pg";
-const { Client } = pkg;
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import mongoose from "mongoose";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import dotenv from 'dotenv';
 
-dotenv.config();
-
-class User {
-  constructor(client) {
-    this.client = client;
-  }
-
-  // Create users table
-  static async createTable(client) {
-    const createTableQuery = `
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        username VARCHAR(255) NOT NULL UNIQUE,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        password VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-    await client.query(createTableQuery);
-  }
-
-  // Hash password before saving
-  static async hashPassword(password) {
-    return await bcrypt.hash(password, 10);
-  }
-
-  // Create a new user
-  async create(userData) {
-    const { name, username, email, password } = userData;
-    const hashedPassword = await User.hashPassword(password);
-
-    const insertQuery = `
-      INSERT INTO users (name, username, email, password) 
-      VALUES ($1, $2, $3, $4) 
-      RETURNING id, name, username, email, created_at
-    `;
-
-    try {
-      const result = await this.client.query(insertQuery, [name, username, email, hashedPassword]);
-      return result.rows[0];
-    } catch (error) {
-      throw error;
+const userSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+  },
+  username: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  password: {
+    type: String,
+    required: true,
+  },
+  compressedImages: [
+    {
+      url: String,
+      compressedAt: { type: Date, default: Date.now }, // Store the compression date
     }
+  ],
+
+}, { timestamps: true });
+
+// Pre-save hook to hash password before saving
+userSchema.pre("save", async function(next) {
+  if (!this.isModified("password")) return next();
+
+  try {
+    // Hash the password using bcrypt
+    const hashedPassword = await bcrypt.hash(this.password, 10);
+    console.log("Hashed Password: ", hashedPassword);
+    
+    this.password = hashedPassword; // Replace the plain password with the hashed password
+    next();
+  } catch (error) {
+    next(error); // Pass error to the next middleware if any
   }
-
-  // Find user by username
-  async findByUsername(username) {
-    const query = 'SELECT * FROM users WHERE username = $1';
-    const result = await this.client.query(query, [username]);
-    return result.rows[0];
-  }
-
-  // Check password
-  async comparePassword(inputPassword, storedPassword) {
-    return await bcrypt.compare(inputPassword, storedPassword);
-  }
-
-  // Add this method to the User class
-async findById(userId) {
-  const query = 'SELECT id, name, username, email FROM users WHERE id = $1';
-  const result = await this.client.query(query, [userId]);
-
-  if (result.rows.length === 0) {
-    return null; // User not found
-  }
-
-  return result.rows[0]; // Return user data
-}
-
-
-  // Generate access token
-  generateAccessToken(user) {
-    return jwt.sign({
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      name: user.name
-    }, process.env.ACCESS_TOKEN_SECRET, {
-      expiresIn: process.env.ACCESS_TOKEN_EXPIRY
-    });
-  }
-
-  // Generate refresh token
-  generateRefreshToken(user) {
-    return jwt.sign({
-      id: user.id
-    }, process.env.REFRESH_TOKEN_SECRET, {
-      expiresIn: process.env.REFRESH_TOKEN_EXPIRY
-    });
-  }
-}
-
-// PostgreSQL connection setup
-const client = new Client({
-  host: process.env.PG_HOST,
-  port: process.env.PG_PORT,
-  user: process.env.PG_USER,
-  password: process.env.PG_PASSWORD,
-  database: process.env.PG_DATABASE
 });
 
-client.connect()
-  .then(() => User.createTable(client))
-  .catch(err => console.error('Database connection error', err));
 
-export { User, client };
+// Method to check if entered password matches the hashed password
+userSchema.methods.isPasswordCorrect = async function (password) {
+  try {
+    // Compare entered password with stored hashed password
+    return await bcrypt.compare(password, this.password);
+  } catch (error) {
+    console.error("Error comparing password:", error);
+    throw new Error("Password verification failed");
+  }
+};
+
+
+
+
+
+userSchema.methods.generateAccessToken = function () {
+  return jwt.sign({
+      _id: this._id,
+      username: this.username,
+      email: this.email,
+      name: this.name,
+  }, process.env.ACCESS_TOKEN_SECRET, {
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
+  });
+};
+
+userSchema.methods.generateRefreshToken = function () {
+  return jwt.sign({
+      _id: this._id,
+  }, process.env.REFRESH_TOKEN_SECRET, {
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+  });
+};
+
+
+// Create and export the User model
+export const User = mongoose.model("User", userSchema);

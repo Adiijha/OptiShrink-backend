@@ -1,10 +1,11 @@
-import { uploadOnCloudinary } from '../utils/cloudinary.js';  // Import the Cloudinary utility
+import { uploadOnCloudinary } from '../utils/cloudinary.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { User } from '../models/user.models.js';  // Import User model
 
 dotenv.config();
 
@@ -18,7 +19,7 @@ const getCompressionSettings = (compressionLevel) => {
         width: 2400, 
         quality: 80, 
         crop: 'scale', 
-        fetch_format: 'auto', // Automatically choose best format
+        fetch_format: 'auto',
       }; 
       break;
     case 'medium':
@@ -103,11 +104,24 @@ export const compressImageController = asyncHandler(async (req, res) => {
       }
     });
 
-    // Store the Cloudinary URL for later response
-    compressedUrls.push(url);
+    // Add the Cloudinary URL and compression date to the compressedUrls array
+    compressedUrls.push({ url, compressedAt: new Date() });
   }
 
-  // Send success response with the Cloudinary URLs
+  // If the user is logged in (i.e., req.user is set), save the compressed image URLs and dates to their history
+  if (req.user) {
+    const user = await User.findById(req.user._id);  // Assuming user ID is stored in req.user
+
+    if (!user) {
+      throw new ApiError(404, 'User not found');
+    }
+
+    // Add the compressed image URLs and dates to the user's `compressedImages` field
+    user.compressedImages.push(...compressedUrls);
+
+    await user.save();
+  }
+
+  // Send success response with the Cloudinary URLs and compression dates
   res.status(200).json(new ApiResponse(true, 'Images compressed and uploaded successfully', compressedUrls));
 });
-

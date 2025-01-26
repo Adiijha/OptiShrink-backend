@@ -1,23 +1,17 @@
-import pkg from "pg";
-const { Client } = pkg;
-
-import dotenv from "dotenv";
+import {DB_NAME} from '../constants.js';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
 dotenv.config();
 
-const connectDB = async () => {
-  const client = new Client({
-    connectionString: process.env.PG_DATABASE_URL, // Use connection string
-    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false, // Add SSL for production
-  });
-
-  try {
-    await client.connect();
-    console.log("Connected to PostgreSQL:", process.env.PG_DATABASE_URL);
-    return client;
-  } catch (error) {
-    console.error("Error connecting to PostgreSQL:", error.message);
-    process.exit(1);
-  }
-};
+const connectDB = async ()=>{
+    try {
+        const connectionInstance = await mongoose.connect(`${process.env.MONGODB_URI}/${DB_NAME}`);
+        console.log(`Connected to the MongoDB ${connectionInstance.connection.host}`);
+    } catch (error) {
+        console.error("Error in connecting to the database");
+        throw error;
+        
+    }
+}
 
 export default connectDB;

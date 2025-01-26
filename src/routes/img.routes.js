@@ -1,6 +1,7 @@
-import {Router} from 'express';
+import { Router } from 'express';
 import multer from 'multer';
 import { compressImageController } from '../controllers/img.controller.js';
+import { verifyJWT, optionalVerifyJWT } from '../middlewares/auth.middleware.js';
 
 const router = Router();
 
@@ -22,6 +23,6 @@ const upload = multer({ storage: storage });
  * @body { compressionLevel: 'low' | 'medium' | 'high' }
  * @file { image }
  */
-router.post('/optimize-img', upload.single('image'), compressImageController);
+router.post('/optimize-img', upload.single('image'), optionalVerifyJWT, compressImageController);
 
 export default router;
