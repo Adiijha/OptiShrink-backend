@@ -1,0 +1,26 @@
+# Use Node.js base image
+FROM node:18
+
+# Install dependencies (system-level)
+RUN apt-get update && apt-get install -y \
+    libvips-dev \
+    poppler-utils \
+    build-essential
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install Node.js dependencies
+RUN npm install
+
+# Copy the rest of the application code
+COPY . .
+
+# Expose the application port
+EXPOSE 3000
+
+# Start the application
+CMD ["npm", "run", "start"]
