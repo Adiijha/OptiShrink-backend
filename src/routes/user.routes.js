@@ -3,7 +3,7 @@ import {
   registerUser,
   loginUser,
   logoutUser,
-  getProfile // Import the verifyOTP controller
+  getProfile
 } from "../controllers/user.controller.js";
 
 import { verifyJWT } from "../middlewares/auth.middleware.js";

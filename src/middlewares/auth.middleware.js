@@ -2,28 +2,29 @@ import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.models.js";
+import { client } from '../models/user.models.js';
 
-export const verifyJWT = asyncHandler(async (req, res, next) => { //res use nhi huya hai toh uski jagah _ use kr skte hai production grade code ke liye 
+export const verifyJWT = asyncHandler(async (req, res, next) => {
     try {
-        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")
-    
-        if(!token){
-            new ApiError(401, "Unauthorized")
-        }
-    
-        const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
-        const user = await User.findById(decodedToken?._id).select("-password -refreshToken")
-    
-        if(!user){
-            //discuss about frontend
-            throw new ApiError(404, "Invalid Access Token")
-        }
-    
-        req.user = user;
-        next();
+      const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+      if (!token) {
+        throw new ApiError(401, "Token not provided");
+      }
+  
+      const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+      const userModel = new User(client); // Instantiate User with the database client
+      const user = await userModel.findById(decodedToken.id); // Use `id`, not `_id`
+  
+      if (!user) {
+        throw new ApiError(404, "User not found");
+      }
+  
+      req.user = user; // Attach user to request
+      next();
     } catch (error) {
-        throw new ApiError(401, "Invalid Access Token")
-        
+      console.error("JWT Error:", error.message);
+      throw new ApiError(401, "Invalid Access Token");
     }
-
-})
+  });
+  
+  

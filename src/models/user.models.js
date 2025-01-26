@@ -63,6 +63,19 @@ class User {
     return await bcrypt.compare(inputPassword, storedPassword);
   }
 
+  // Add this method to the User class
+async findById(userId) {
+  const query = 'SELECT id, name, username, email FROM users WHERE id = $1';
+  const result = await this.client.query(query, [userId]);
+
+  if (result.rows.length === 0) {
+    return null; // User not found
+  }
+
+  return result.rows[0]; // Return user data
+}
+
+
   // Generate access token
   generateAccessToken(user) {
     return jwt.sign({

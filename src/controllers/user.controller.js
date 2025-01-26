@@ -148,17 +148,27 @@ const registerUser = asyncHandler(async (req, res) => {
 
 // Get Profile
 const getProfile = asyncHandler(async (req, res) => {
-  const getUserQuery = 'SELECT name FROM users WHERE id = $1';
-  const userResult = await client.query(getUserQuery, [req.user.id]);
-
-  if (userResult.rows.length === 0) {
-    return res.status(404).json({ message: "User not found" });
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ message: "Unauthorized access" });
   }
 
-  res.status(200).json({ 
-    status: 200, 
-    data: { name: userResult.rows[0].name } 
-  });
+  try {
+    const query = "SELECT name, username, email FROM users WHERE id = $1";
+    const result = await client.query(query, [req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      status: 200,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error retrieving profile:", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
+
 
 export { registerUser, loginUser, logoutUser, getProfile };
