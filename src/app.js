@@ -6,7 +6,7 @@ import cookieparser from 'cookie-parser';
 const app = express();
 
 const corsOptions = {
-    origin: "http://localhost:5173",
+    origin: "https://optishrink.vercel.app",
     credentials: true,
 };
 
