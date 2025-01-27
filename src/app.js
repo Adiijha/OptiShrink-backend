@@ -21,8 +21,8 @@ app.options("*", cors(corsOptions));
 import userRouter from './routes/user.routes.js';
 app.use('/user', userRouter);
 
-// import pdfRouter from './routes/pdf.routes.js';
-// app.use('/pdf', pdfRouter);
+import pdfRouter from './routes/pdf.routes.js';
+app.use('/pdf', pdfRouter);
 
 import imageRouter from './routes/img.routes.js';
 app.use('/image', imageRouter);
