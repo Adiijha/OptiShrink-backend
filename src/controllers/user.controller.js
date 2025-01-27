@@ -4,6 +4,7 @@ import { User } from "../models/user.models.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import dotenv from "dotenv";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
 dotenv.config();
 
@@ -175,23 +176,48 @@ const getAllLinks = asyncHandler(async (req, res) => {
     throw new ApiError(401, "You must be logged in to view your image links");
   }
 
-  // Retrieve all compressed image URLs and their compression dates for the logged-in user
-  const user = await User.findById(req.user._id).select("compressedImages");
+  // Retrieve all compressed image URLs, their compression dates, and their IDs for the logged-in user
+  const user = await User.findById(req.user._id).select("compressedFiles");
 
   if (!user) {
     throw new ApiError(404, "User not found");
   }
 
-  // Prepare the response data, including image URL and compression date
-  const imageLinksWithDate = user.compressedImages.map(image => ({
+  // Prepare the response data, including image URL, compression date, and image ID
+  const imageLinksWithDateAndId = user.compressedFiles.map(image => ({
+    id: image._id.toString(), // Include the image ID as a string
     url: image.url,
     compressedAt: image.compressedAt.toISOString(), // Convert date to ISO format
   }));
 
-  // Send the response with the user's compressed image URLs and dates
-  res.status(200).json(new ApiResponse(true, "Retrieved image links successfully", imageLinksWithDate));
+  // Send the response with the user's compressed image URLs, dates, and IDs
+  res.status(200).json(new ApiResponse(true, "Retrieved image links successfully", imageLinksWithDateAndId));
+});
+
+const deleteLink = asyncHandler(async (req, res) => {
+  const { fileId } = req.body; // Get fileId from the request body
+
+  // Get the authenticated user from the request object (set by the verifyJWT middleware)
+  const user = req.user; 
+
+  // Find the file to delete by ID in the user's compressedFiles array
+  const fileIndex = user.compressedFiles.findIndex((file) => file._id.toString() === fileId);
+  if (fileIndex === -1) {
+    throw new ApiError(404, 'File not found');
+  }
+
+  // Remove the file from the array
+  user.compressedFiles.splice(fileIndex, 1);
+  await user.save(); // Save the user with the updated compressedFiles array
+
+  res.status(200).json({
+    success: true,
+    message: 'File deleted successfully',
+  });
 });
 
 
+export default deleteLink;
 
-export { registerUser, loginUser, logoutUser, getProfile, getAllLinks };
+
+export { registerUser, loginUser, logoutUser, getProfile, getAllLinks, deleteLink };

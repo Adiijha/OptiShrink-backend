@@ -117,7 +117,7 @@ export const compressImageController = asyncHandler(async (req, res) => {
     }
 
     // Add the compressed image URLs and dates to the user's `compressedImages` field
-    user.compressedImages.push(...compressedUrls);
+    user.compressedFiles.push(...compressedUrls);
 
     await user.save();
   }

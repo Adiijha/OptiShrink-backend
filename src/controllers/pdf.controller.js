@@ -2,15 +2,21 @@ import axios from 'axios';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { User } from "../models/user.models.js";
+
 import dotenv from 'dotenv';
 import fs from 'fs';
 import FormData from 'form-data';
 dotenv.config();
 
+
+
 export const compressPdfController = asyncHandler(async (req, res) => {
     if (!req.file || !req.file.path) {
         throw new ApiError(400, 'PDF file is required');
     }
+
+    const filePath = req.file.path; // Store the file path for cleanup
 
     try {
         // Define compression profiles based on the level
@@ -44,7 +50,7 @@ export const compressPdfController = asyncHandler(async (req, res) => {
 
         // Step 1: Upload PDF to PDF.co
         const form = new FormData();
-        form.append('file', fs.createReadStream(req.file.path)); // Read the file from the request
+        form.append('file', fs.createReadStream(filePath)); // Read the file from the request
         form.append('name', `compressed-${Date.now()}.pdf`);
 
         const uploadResponse = await axios.post('https://api.pdf.co/v1/file/upload', form, {
@@ -78,42 +84,50 @@ export const compressPdfController = asyncHandler(async (req, res) => {
             }
         );
 
-        console.log('Compression API Response:', compressionResponse.data);
-
         if (compressionResponse.data.error) {
             throw new ApiError(500, `PDF compression failed: ${compressionResponse.data.message}`);
         }
 
-        // Step 3: Send the compressed PDF details
+        const compressedFile = {
+            url: compressionResponse.data.url,
+            compressedAt: new Date() // Store the timestamp
+        };
+
+        // Step 3: Update the user's compressedFiles history in the database
+        const userId = req.user._id; // Assumes user is authenticated and `req.user` is populated
+        const user = await User.findById(userId);
+
+        if (!user) {
+            throw new ApiError(404, 'User not found');
+        }
+
+        user.compressedFiles.push(compressedFile);
+        await user.save();
+
+        // Send response including compressedFiles
         res.status(200).json(
             new ApiResponse(true, 'PDF compressed successfully', {
-                compressedPdfUrl: compressionResponse.data.url,
+                compressedFile,
                 originalFileSize: req.file.size,
                 compressedFileSize: compressionResponse.data.fileSize,
                 pageCount: compressionResponse.data.pageCount,
             })
         );
 
-        // Step 4: Delete the file locally after processing is done
-        fs.unlink(req.file.path, (err) => {
+    } catch (err) {
+        console.error('Error during PDF compression:', err.message || err);
+
+        throw new ApiError(500, `Error compressing PDF: ${err.message || err.response?.data?.message || 'Unknown error'}`);
+    } finally {
+        // Step 4: Always delete the file locally after processing is done (even on error)
+        fs.unlink(filePath, (err) => {
             if (err) {
                 console.error(`Error deleting the file: ${err.message}`);
             } else {
                 console.log('Local PDF file deleted successfully');
             }
         });
-
-    } catch (err) {
-        console.error('Error during PDF compression:', err.message || err);
-        throw new ApiError(500, `Error compressing PDF: ${err.message || err.response?.data?.message || 'Unknown error'}`);
-
-        // Step 5: In case of an error, ensure file is deleted
-        fs.unlink(req.file.path, (err) => {
-            if (err) {
-                console.error(`Error deleting the file: ${err.message}`);
-            } else {
-                console.log('Local PDF file deleted successfully after error');
-            }
-        });
     }
 });
+
+

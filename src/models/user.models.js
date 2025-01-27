@@ -22,7 +22,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  compressedImages: [
+  compressedFiles: [
     {
       url: String,
       compressedAt: { type: Date, default: Date.now }, // Store the compression date

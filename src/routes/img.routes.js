@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { compressImageController } from '../controllers/img.controller.js';
-import { verifyJWT, optionalVerifyJWT } from '../middlewares/auth.middleware.js';
+import { optionalVerifyJWT } from '../middlewares/auth.middleware.js';
 
 const router = Router();
 

@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { compressPdfController } from '../controllers/pdf.controller.js';
+import { optionalVerifyJWT } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
@@ -17,6 +18,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Route for compressing PDF
-router.post('/compress-pdf', upload.single('file'), compressPdfController);
+router.post('/compress-pdf', upload.single('file'),optionalVerifyJWT, compressPdfController);
 
 export default router;
